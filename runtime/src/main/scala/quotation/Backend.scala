@@ -2,7 +2,7 @@ package quotation
 import scala.quoted.*
 
 /** Stateful let insertion; code values share bindings until the enclosing reify. */
-object Combinators:
+object Runtime:
   private val names = new java.util.concurrent.atomic.AtomicLong
   private def freshName = s"x${names.getAndIncrement()}"
   private class Frame(val quotes: Quotes):
@@ -45,18 +45,34 @@ object Combinators:
   def mkVar(value: Expr[Any]): Expr[Any] = value
   def mkLiteral(value: Expr[Any]): Expr[Any] = value
   def mkApp(fun: Expr[Any], arg: Expr[Any])(using Quotes): Expr[Any] =
-    //println("mkApp")
     import quotes.reflect.*
     reflect(Apply(Select.unique(fun.asTerm, "apply"), List(arg.asTerm)).asExpr)
   def mkPrint(arg: Expr[Any])(using Quotes): Expr[Any] =
-    //println("mkPrint")
     reflect('{ Predef.println($arg) })
   def mkAdd(lhs: Expr[Any], rhs: Expr[Any])(using Quotes): Expr[Any] =
-    //println("mkAdd")
     reflect('{ ${lhs.asExprOf[Int]} + ${rhs.asExprOf[Int]} })
+  def mkMul(lhs: Expr[Any], rhs: Expr[Any])(using Quotes): Expr[Any] =
+    reflect('{ ${lhs.asExprOf[Double]} * ${rhs.asExprOf[Double]} })
+
+  /** Read at this point in the generated program, even if the member later changes. */
+  def mkSelect(receiver: Expr[Any], name: String)(using Quotes): Expr[Any] =
+    import quotes.reflect.*
+    reflect(Select.unique(receiver.asTerm, name).asExpr)
+
+  def mkAssign(receiver: Expr[Any], name: String, value: Expr[Any])(using Quotes): Expr[Any] =
+    import quotes.reflect.*
+    reflect(Assign(Select.unique(receiver.asTerm, name), value.asTerm).asExpr)
+
+  /** Ordinary strict method calls, including generic companion factory calls. */
+  def mkCall(receiver: Expr[Any], name: String, types: List[Type[?]], args: List[Expr[Any]])(using Quotes): Expr[Any] =
+    import quotes.reflect.*
+    val typeArgs = types.map(t => TypeRepr.of(using t))
+    reflect(Select.overloaded(receiver.asTerm, name, typeArgs, args.map(_.asTerm)).asExpr)
+
   def mkSeq(first: Expr[Any], rest: Expr[Any])(using Quotes): Expr[Any] =
     // Both arguments have already been constructed in left-to-right order.
     rest
+
   // Higher-order abstract syntax: the callback receives code for the fresh parameter.
   def mkLam[T](tpe: Type[T], body: Expr[Any] => Expr[Any])(using Quotes): Expr[Any] =
     //println("mkLam")

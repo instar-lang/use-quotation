@@ -6,4 +6,5 @@ Try examples:
 
 ```sh
 sbt "example/run"
+sbt "example/runMain ImpPower"
 ```
