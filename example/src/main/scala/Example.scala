@@ -1,6 +1,6 @@
 import scala.quoted.*
 import scala.quoted.staging.{Compiler, withQuotes}
-import quotation.Runtime.{reify, run}
+import useQuotation.Runtime.{reify, run}
 
 object Example:
   given Compiler = Compiler.make(getClass.getClassLoader)
@@ -49,7 +49,7 @@ object Example:
     }
 
     withQuotes {
-      println({ '{ (y: Int) => {
+      println(reify { '{ (y: Int) => {
         println("Hey")
         ${plus('{ println("This should not be duplicated"); y })} + ${printPlus('y)}
       } } }.show)

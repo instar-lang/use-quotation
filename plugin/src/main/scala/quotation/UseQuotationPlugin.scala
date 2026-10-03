@@ -59,7 +59,7 @@ class ElaborationPhase extends PluginPhase:
     case Apply(Select(q: Quote, _), List(quotes)) if !q.isTypeQuote =>
 
       def call(name: String, args: List[Tree], contextual: Boolean = false): Tree =
-        val base = ref(requiredModule("quotation.Runtime")).select(name.toTermName).appliedToArgs(args)
+        val base = ref(requiredModule("useQuotation.Runtime")).select(name.toTermName).appliedToArgs(args)
         if contextual then base.appliedTo(quotes) else base
 
       def leaf(body: Tree): Tree = Quote(body, q.tags).select("apply".toTermName).appliedTo(quotes).asInstance(exprAny)
@@ -103,12 +103,12 @@ class ElaborationPhase extends PluginPhase:
           val parameter = d.termParamss.flatten.head
           val mt = MethodType(List("code".toTermName))(_ => List(exprAny), _ => exprAny)
           val callback = Lambda(mt, args =>
-            ref(requiredModule("quotation.Runtime")).select("reify".toTermName)
+            ref(requiredModule("useQuotation.Runtime")).select("reify".toTermName)
               .appliedToType(defn.AnyType)
               .appliedTo(elab(d.rhs, env.updated(parameter.symbol, args.head))).appliedTo(quotes)
           )
           val tag = typeTag(body.tpe.widen)
-          ref(requiredModule("quotation.Runtime"))
+          ref(requiredModule("useQuotation.Runtime"))
             .select("mkLam".toTermName)
             .appliedToType(body.tpe.widen)
             .appliedToArgs(List(tag, callback)).appliedTo(quotes)

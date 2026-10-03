@@ -1,6 +1,6 @@
 import scala.quoted.*
 import scala.quoted.staging.{Compiler, withQuotes}
-import quotation.Runtime.{reify, run}
+import useQuotation.Runtime.{reify, run}
 
 object ImpPower:
 
