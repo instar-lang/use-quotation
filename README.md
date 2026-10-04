@@ -9,11 +9,11 @@ Such a distinction mirrors the use-mention distinction in logic and philosophy. 
 
 > Snow is white
 
-we use the word "snow" to talk about snow. But in
+we **use** the word "snow" to talk about snow. But in
 
 > "Snow" has four letters
 
-we mention the word to talk about its form.
+we **mention** the word to talk about its form.
 However, more often [quotation mixes use and mention](https://homes.luddy.indiana.edu/ccshan/quote/characterizing.pdf):
 
 > Quine says quotation "has a certain anomalous feature".
@@ -22,12 +22,12 @@ The quoted words are attributed to Quine, but they also function as a verb phras
 
 Compare the direct quotation
 
-> Quine says "quotation has a certain anomalous feature"
+> Quine says "quotation has a certain anomalous feature".
 
-it presents the entire clause as quoted wording, without **using** it.
+it presents the entire clause as quoted wording, **without using** it.
 
 **This Scala compiler plugin experiments with an alternative
-use-quotation semantics in staged programming.
+use-quotation semantics in staged programming where quoted terms are always used.
 Quotation is an instruction to residualize a computation, rather than merely constructing syntax.**
 
 ### Usage
