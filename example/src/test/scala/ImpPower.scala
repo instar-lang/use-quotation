@@ -90,9 +90,13 @@ class ImpPowerTest extends FunSuite with Base:
         assert(cell.tpt.tpe =:= TypeRepr.of[Mut[Double]])
         val Block(List(method: DefDef), _: Closure) = strip(lambda): @unchecked
         val Block(bindings, result) = strip(method.rhs.get): @unchecked
-        assertEquals(bindings.map(_.asInstanceOf[ValDef].tpt.tpe),
-          List(TypeRepr.of[Double], TypeRepr.of[Double], TypeRepr.of[Unit],
-            TypeRepr.of[Double], TypeRepr.of[Double], TypeRepr.of[Unit]))
+        val actualTypes = bindings.map(_.asInstanceOf[ValDef].tpt.tpe)
+        val expectedTypes = List(TypeRepr.of[Double], TypeRepr.of[Double], TypeRepr.of[Unit],
+          TypeRepr.of[Double], TypeRepr.of[Double], TypeRepr.of[Unit])
+        assertEquals(actualTypes.size, expectedTypes.size)
+        // Equivalent types may have different internal prefixes after unpickling.
+        for ((actual, expected), index) <- actualTypes.zip(expectedTypes).zipWithIndex do
+          assert(actual =:= expected, s"binding $index: ${actual.show} != ${expected.show}")
         assert(bindings.forall(_.symbol.owner == method.symbol))
         val Select(receiver, "x") = strip(result): @unchecked
         assertEquals(strip(receiver).symbol, cell.symbol)

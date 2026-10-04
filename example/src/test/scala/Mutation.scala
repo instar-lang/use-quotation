@@ -50,9 +50,13 @@ class MutationChecksTest extends FunSuite with Base:
       assertEquals(strip(result).symbol, function.symbol)
       val Block(List(method: DefDef), _: Closure) = strip(function.rhs.get): @unchecked
       val Block(bindings, last) = strip(method.rhs.get): @unchecked
-      assertEquals(bindings.map(_.asInstanceOf[ValDef].tpt.tpe),
-        List(TypeRepr.of[Double], TypeRepr.of[Double], TypeRepr.of[Unit],
-          TypeRepr.of[Double], TypeRepr.of[Double], TypeRepr.of[Unit], TypeRepr.of[Double]))
+      val actualTypes = bindings.map(_.asInstanceOf[ValDef].tpt.tpe)
+      val expectedTypes = List(TypeRepr.of[Double], TypeRepr.of[Double], TypeRepr.of[Unit],
+        TypeRepr.of[Double], TypeRepr.of[Double], TypeRepr.of[Unit], TypeRepr.of[Double])
+      assertEquals(actualTypes.size, expectedTypes.size)
+      // Equivalent types may have different internal prefixes after unpickling.
+      for ((actual, expected), index) <- actualTypes.zip(expectedTypes).zipWithIndex do
+        assert(actual =:= expected, s"binding $index: ${actual.show} != ${expected.show}")
       assert(bindings.forall(_.symbol.owner == method.symbol))
       assertEquals(strip(last).symbol, bindings.last.symbol)
     }

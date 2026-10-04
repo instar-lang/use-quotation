@@ -1,4 +1,4 @@
-ThisBuild / scalaVersion := "3.7.4"
+ThisBuild / scalaVersion := "3.9.0"
 ThisBuild / organization := "use-quotation"
 ThisBuild / version := "0.1.0-SNAPSHOT"
 
@@ -31,7 +31,7 @@ lazy val example = project.in(file("example"))
     Compile / scalacOptions ++= Seq(
       "-Xplugin:" + (plugin / Compile / packageBin).value.getAbsolutePath,
       "-Xplugin-require:use-quotation",
-      "-Xprint:staging,quotationElaboration"
+      "-Vprint:staging,quotationElaboration"
     ),
     Test / fork := true,
     Test / parallelExecution := false,
