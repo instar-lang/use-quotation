@@ -24,34 +24,62 @@ class ElaborationPhase extends PluginPhase:
 
   private def exprAny(using Context): Type = defn.QuotedExprClass.typeRef.appliedTo(defn.AnyType)
 
-  // Reject level 2 before rewriting removes the original quotation structure.
-  override def prepareForApply(tree: Apply)(using Context): Context =
-    tree match
-      case Apply(Select(q: Quote, _), _) if !q.isTypeQuote =>
-        val checker = new TreeTraverser:
-          private var level = 1
-          def traverse(tree: Tree)(using Context): Unit = tree match
-            case quote: Quote =>
-              if level >= 1 then report.error("use-quotation supports only two stages: nested quotation is unsupported", quote.srcPos)
-              level += 1
-              traverse(quote.body)
-              level -= 1
-            case splice: Splice =>
-              level -= 1
-              traverse(splice.expr)
-              level += 1
-            case _ => traverseChildren(tree)
-        checker.traverse(q.body)
-      case _ => ()
-    ctx
+  // Native quotations keep Scala's staging rules; this restriction is opt-in.
+  private def checkTwoStages(q: Quote)(using Context): Unit =
+    val checker = new TreeTraverser:
+      def traverse(tree: Tree)(using Context): Unit = tree match
+        case quote: Quote if !quote.isTypeQuote =>
+          report.error("use-quotation supports only two stages: nested quotation is unsupported", quote.srcPos)
+        case _: Quote => ()
+        // Generator code is inspected separately by rewrite. Its native quotes
+        // may use all of Scala's stages; marked quotes get their own check.
+        case _: Splice => ()
+        case _ => traverseChildren(tree)
+    checker.traverse(q.body)
 
   override def transformUnit(tree: Tree)(using Context): Tree = rewrite(tree, Map.empty)
 
-  // Traverse quotes explicitly: a quote inside a splice needs the outer binder environment.
+  private def directQuote(tree: Tree): Option[Apply] = tree match
+    case app @ Apply(Select(q: Quote, _), List(_)) if !q.isTypeQuote => Some(app)
+    case Typed(expr, _) => directQuote(expr)
+    case Inlined(_, Nil, expr) => directQuote(expr)
+    case Block(Nil, expr) => directQuote(expr)
+    case _ => None
+
+  // Discover markers through quote/splice boundaries without elaborating native quotes.
   private def rewrite(tree: Tree, env: Map[Symbol, Tree])(using Context): Tree =
     val mapper = new TreeMap:
+      private var level = 0
       override def transform(tree: Tree)(using Context): Tree = tree match
-        case app @ Apply(Select(q: Quote, _), _) if !q.isTypeQuote => elaborate(app, env)
+        case app @ Apply(fun, List(arg)) if fun.symbol == requiredMethod("useQuotation.Syntax.unary_!") =>
+          if level != 0 then
+            report.error("Alternative quotation is supported only at the generator stage", app.srcPos)
+            arg
+          else directQuote(arg) match
+            case Some(quote @ Apply(Select(q: Quote, _), _)) =>
+              checkTwoStages(q)
+              elaborate(quote, env).asInstance(app.tpe).withSpan(app.span)
+            case None =>
+              // Scala can cancel !'{ $code } to !code before this phase.
+              // Already constructed code is passed through, never re-elaborated.
+              transform(arg).withSpan(app.span)
+            case _ => tree // directQuote only returns quotation applications.
+        case q: Quote if !q.isTypeQuote =>
+          level += 1
+          try super.transform(q)
+          finally level -= 1
+        case s: Splice =>
+          level -= 1
+          try super.transform(s)
+          finally level += 1
+        // A native quote in a splice may mention a parameter replaced by mkLam.
+        // Insert the callback's code value using a native splice, not combinators.
+        case id: Ident if level == 1 && env.contains(id.symbol) =>
+          val codeType = defn.QuotedExprClass.typeRef.appliedTo(id.tpe.widen)
+          val mt = ContextualMethodType(List("quotes".toTermName))(
+            _ => List(requiredClass("scala.quoted.Quotes").typeRef), _ => codeType
+          )
+          Splice(Lambda(mt, _ => env(id.symbol).asInstance(codeType)), id.tpe.widen).withSpan(id.span)
         case _ => super.transform(tree)
     mapper.transform(tree)
 

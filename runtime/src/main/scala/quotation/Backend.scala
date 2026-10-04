@@ -34,7 +34,7 @@ object Runtime:
   def reflect[T](rhs: Expr[T])(using Quotes): Expr[T] =
     val frame = active.get()
     if frame == null then
-      throw new IllegalStateException("Let insertion requires Combinators.run { ... } or Combinators.reify { ... } around the whole generator")
+      throw new IllegalStateException("Let insertion requires Runtime.run { ... } or Runtime.reify { ... } around the whole generator")
     frame.reflect(rhs)
 
   /** Compile and execute code with one reification boundary for the whole generator. */

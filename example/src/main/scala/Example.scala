@@ -1,61 +1,31 @@
 import scala.quoted.*
 import scala.quoted.staging.{Compiler, withQuotes}
 import useQuotation.Runtime.{reify, run}
+import useQuotation.Syntax.*
 
 object Example:
   given Compiler = Compiler.make(getClass.getClassLoader)
+  case class Mut[T](var x: T)
 
-  // def bad(using Quotes): Expr[Quotes ?=> Expr[Int]] = '{ '{ 1 } }
+  def impPower(x: Expr[Double], n: Int, result: Expr[Mut[Double]])(using Quotes): Expr[Double] =
+    if n == 0 then '{ ${result}.x }
+    else '{
+      ${result}.x = $x * ${result}.x;
+      ${impPower(x, n - 1, result)}
+    }
 
-  def id(x: Expr[Int])(using Quotes): Expr[Int] = x
+  def powerCode(n: Int)(using Quotes): Expr[Double => Double] =
+    val res = !'{ Mut[Double](1.0) }
+    '{ (x: Double) => ${impPower('x, n, res)} }
 
-  def test1 =
-    val answer = run { '{ ((x: Int) => x)(42) } }
-    assert(answer == 42)
-    println(s"result: $answer")
-
-  def plus(x: Expr[Int])(using Quotes): Expr[Int] =
-    '{ $x + $x }
-
-  def triple(x: Expr[Int])(using Quotes): Expr[Int] =
-    '{ $x + $x + $x }
-
-  def printPlus(x: Expr[Int])(using Quotes): Expr[Int] =
-    val code = '{ println("This should not be discarded") }
-    '{ $x + $x }
-
-  def test2(using Quotes) =
-    val value = '{ 7 }
-    val spliced = '{ ((x: Int) => x)($value) }
-    spliced
+  def specImpPower(n: Int): Double => Double = run { powerCode(n) }
 
   def main(args: Array[String]): Unit =
-    assert(run { plus('{ println("Hello"); 21 }) } == 42)
-    withQuotes {
-      println(reify { '{ println("Hello"); println("World"); 21 } }.show)
-      println(reify { plus('{ println("Hello"); println("World"); 21 }) }.show)
-    }
-
-    withQuotes {
-      println(reify { test2 }.show)
-    }
-
-    withQuotes {
-      println(reify { triple('{ 21 + 21 }) }.show)
-    }
-
-    withQuotes {
-      println(reify { '{ ((x: Int) => ${plus('x)})(100) } }.show)
-    }
-
-    withQuotes {
-      println(reify { '{ (y: Int) => {
-        println("Hey")
-        ${plus('{ println("This should not be duplicated"); y })} + ${printPlus('y)}
-      } } }.show)
-    }
-
-    /*
-    test1
-    assert(run { plus('{ println("Hello"); 21 }) } == 42)
-    */
+    withQuotes { println(reify { powerCode(3) }.show) }
+    val cube = specImpPower(3)
+    assert(cube(4) == 4 * 4 * 4)
+    // Note that cube is a function that captures a mutable cell,
+    // so it is not referentially transparent.
+    assert(specImpPower(3)(2.0) == 8.0)
+    assert(specImpPower(3)(3.0) == 27.0)
+    assert(specImpPower(0)(10.0) == 1.0)

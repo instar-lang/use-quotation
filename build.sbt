@@ -31,5 +31,6 @@ lazy val example = project.in(file("example"))
       "-Xplugin:" + (plugin / Compile / packageBin).value.getAbsolutePath,
       "-Xplugin-require:use-quotation",
       "-Xprint:staging,quotationElaboration"
-    )
+    ),
+    libraryDependencies += "org.scalameta" %% "munit" % "1.0.4" % Test
   )
