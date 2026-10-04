@@ -8,7 +8,10 @@ import munit.FunSuite
 class BasicTests extends FunSuite with Base:
   given Compiler = Compiler.make(getClass.getClassLoader)
 
-  def id(x: Expr[Int])(using Quotes): Expr[Int] = x
+  def id[T](x: Expr[T])(using Quotes): Expr[T] = x
+
+  def idCode[T: Type](using Quotes): Expr[T => T] =
+    '{ (x: T) => ${useQuotation.Runtime.reflect('x)} }
 
   def plus(x: Expr[Int])(using Quotes): Expr[Int] =
     !'{ $x + $x }
@@ -28,6 +31,8 @@ class BasicTests extends FunSuite with Base:
   test("id"):
     val answer = run { !'{ ((x: Int) => x)(42) } }
     assertEquals(answer, 42)
+    assertEquals(run { idCode[Int] }(42), 42)
+    assertEquals(run { idCode[String] }("value"), "value")
 
   test("plus"):
     val captured = run { !'{ (x: Int) => ${ plus('x) } } }
@@ -58,6 +63,16 @@ class BasicTests extends FunSuite with Base:
     // Explicit reify remains composable with the wrapper and with native staging.run.
     assert(run { reify { !'{ 20 + 22 } } } == 42)
     assert(staging.run { reify { !'{ 20 + 22 } } } == 42)
+
+  test("simple lambda"):
+    val zero = run { '{ () => ${plus('{ 21 })} } }
+    assertEquals(zero(), 42)
+
+    val two = run { '{ (x: Int, y: Int) => ${plus('{ x + y })} } }
+    assertEquals(two(20, 1), 42)
+
+    val contextual: Int ?=> Int = run[Int ?=> Int] { '{ (x: Int) ?=> ${plus('x)} } }
+    assertEquals(contextual(using 21), 42)
 
   test("playground") {
     withQuotes {

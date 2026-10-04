@@ -37,7 +37,10 @@ class ElaborationPhase extends PluginPhase:
         case _ => traverseChildren(tree)
     checker.traverse(q.body)
 
-  override def transformUnit(tree: Tree)(using Context): Tree = rewrite(tree, Map.empty)
+  override def transformUnit(tree: Tree)(using Context): Tree =
+    // Body scopes introduce quote/splice pairs after staging. Recollect witnesses
+    // at their new boundaries before splicing lifts and pickles the generators.
+    new dotty.tools.dotc.staging.CrossStageSafety().transform(rewrite(tree, Map.empty))
 
   private def directQuote(tree: Tree): Option[Apply] = tree match
     case app @ Apply(Select(q: Quote, _), List(_)) if !q.isTypeQuote => Some(app)
@@ -46,14 +49,14 @@ class ElaborationPhase extends PluginPhase:
     case Block(Nil, expr) => directQuote(expr)
     case _ => None
 
-  // Discover markers through quote/splice boundaries without elaborating native quotes.
   private def rewrite(tree: Tree, env: Map[Symbol, Tree])(using Context): Tree =
     val mapper = new TreeMap:
       private var level = 0
+      private var inNativeQuote = false
       override def transform(tree: Tree)(using Context): Tree = tree match
         case app @ Apply(fun, List(arg)) if fun.symbol == requiredMethod("useQuotation.Syntax.unary_!") =>
           if level != 0 then
-            report.error("Alternative quotation is supported only at the generator stage", app.srcPos)
+            report.error("Use-quotation is supported only at the generator stage", app.srcPos)
             arg
           else directQuote(arg) match
             case Some(quote @ Apply(Select(q: Quote, _), _)) =>
@@ -65,15 +68,42 @@ class ElaborationPhase extends PluginPhase:
               transform(arg).withSpan(app.span)
             case _ => tree // directQuote only returns quotation applications.
         case q: Quote if !q.isTypeQuote =>
+          val previous = inNativeQuote
+          inNativeQuote = true
           level += 1
           try super.transform(q)
-          finally level -= 1
+          finally
+            level -= 1
+            inNativeQuote = previous
+        case block @ Block(List(_: DefDef), _: Closure) if level > 0 && inNativeQuote =>
+          // Native syntax stays native, but each quoted lambda body gets a reification frame.
+          val transformed = super.transform(block).asInstanceOf[Block]
+          val method = transformed.stats.head.asInstanceOf[DefDef]
+          val resultType = method.rhs.tpe.widen
+          val mt = ContextualMethodType(List("quotes".toTermName))(
+            _ => List(requiredClass("scala.quoted.Quotes").typeRef), _ => exprAny
+          )
+          val fun = Lambda(mt, args =>
+            // CrossStageSafety recollects the witnesses for this new native quote.
+            val body = Quote(method.rhs, Nil).select("apply".toTermName)
+              .appliedTo(args.head).asInstance(exprAny)
+            ref(requiredModule("useQuotation.Runtime")).select("reify".toTermName)
+              .appliedToType(defn.AnyType).appliedTo(body).appliedTo(args.head)
+          )(using ctx.withOwner(method.symbol))
+          val scopedBody = Splice(fun, resultType).withSpan(method.rhs.span)
+          cpy.Block(transformed)(
+            stats = List(cpy.DefDef(method)(rhs = scopedBody)), expr = transformed.expr
+          )
         case s: Splice =>
+          val previous = inNativeQuote
+          inNativeQuote = false
           level -= 1
           try super.transform(s)
-          finally level += 1
+          finally
+            level += 1
+            inNativeQuote = previous
         // A native quote in a splice may mention a parameter replaced by mkLam.
-        // Insert the callback's code value using a native splice, not combinators.
+        // Insert the callback's code value using a native splice, not via our backend combinators.
         case id: Ident if level == 1 && env.contains(id.symbol) =>
           val codeType = defn.QuotedExprClass.typeRef.appliedTo(id.tpe.widen)
           val mt = ContextualMethodType(List("quotes".toTermName))(

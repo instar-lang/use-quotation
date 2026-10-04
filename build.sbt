@@ -25,13 +25,16 @@ lazy val example = project.in(file("example"))
   .dependsOn(runtime)
   .settings(
     name := "use-quotation-example",
-    Compile / run / mainClass := Some("Example"),
     publish / skip := true,
-    Test / parallelExecution := false,
+    Compile / run / mainClass := Some("Example"),
+    Compile / run / javaOptions ++= Seq("-Xms512M", "-Xmx4G"),
     Compile / scalacOptions ++= Seq(
       "-Xplugin:" + (plugin / Compile / packageBin).value.getAbsolutePath,
       "-Xplugin-require:use-quotation",
       "-Xprint:staging,quotationElaboration"
     ),
+    Test / fork := true,
+    Test / parallelExecution := false,
+    Test / javaOptions ++= Seq("-Xms512M", "-Xmx4G"),
     libraryDependencies += "org.scalameta" %% "munit" % "1.0.4" % Test
   )
