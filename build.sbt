@@ -27,6 +27,7 @@ lazy val example = project.in(file("example"))
     name := "use-quotation-example",
     Compile / run / mainClass := Some("Example"),
     publish / skip := true,
+    Test / parallelExecution := false,
     Compile / scalacOptions ++= Seq(
       "-Xplugin:" + (plugin / Compile / packageBin).value.getAbsolutePath,
       "-Xplugin-require:use-quotation",
