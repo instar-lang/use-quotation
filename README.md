@@ -32,18 +32,31 @@ Quotation is an instruction to residualize a computation, rather than merely con
 
 ### Usage
 
-Use ordinary `'{ ... }` for Scala quotation, and `!'{ ... }` for automatic let insertion:
+Use ordinary `'{ ... }` for Scala quotation, and `!'{ ... }` for semantics preservation via automatic let-insertion:
 
 ```scala
 import scala.quoted.*
 import useQuotation.Syntax.*
 import useQuotation.Runtime.run
 
-def plus(x: Expr[Int])(using Quotes): Expr[Int] = !'{ $x + $x }
+def plus(x: Expr[Int])(using Quotes): Expr[Int] = '{ $x + $x }
 
 // With a given scala.quoted.staging.Compiler:
+
 val answer = run { plus(!'{ println("Hello"); 21 }) }
 // answer == 42; Hello is printed once.
+```
+
+The above code generates the following residual program:
+
+```scala
+val x1 = println("Hello")
+val x2 = 21
+x2 + x2
+```
+However, using ordinary mention-quotation `run { plus('{ println("Hello"); 21 }) }` will generate code
+```
+{ println("Hello"); 21 } + { println("Hello"); 21 }
 ```
 
 Both forms share `Expr[T]` and Scala's splice syntax. Mark each alternative
