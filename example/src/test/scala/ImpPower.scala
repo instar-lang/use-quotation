@@ -66,7 +66,7 @@ class ImpPowerTest extends FunSuite with Base:
 
     def specImpPower(n: Int): Double => Double = run { powerCode(n) }
 
-    test("imperative power - mix mention- and use-quotation".only) {
+    test("imperative power - mix mention- and use-quotation") {
       withQuotes { println(reify { powerCode(3) }.show) }
       val cube = specImpPower(3)
       assertEquals(cube(4), 64.0)
